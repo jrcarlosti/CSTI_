@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CSTI — Controle de Estoque | Gráfica</title>
+<meta name="description" content="Sistema de Controle de Estoque para Gráfica — produtos, serviços e fluxo de caixa integrado ao Google Sheets"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <div class="logo-wrap">
+      <div class="logo-icon">🖨️</div>
+      <div>
+        <div class="logo-title">CSTI</div>
+        <div class="logo-sub">Gráfica · Estoque</div>
+      </div>
+    </div>
+    <button class="sidebar-toggle" id="sidebarToggle" title="Recolher menu">‹</button>
+  </div>
+
+  <nav class="nav-menu">
+    <button class="nav-item active" data-page="dashboard" id="nav-dashboard">
+      <span class="nav-icon">📊</span><span class="nav-label">Dashboard</span>
+    </button>
+    <button class="nav-item" data-page="produtos" id="nav-produtos">
+      <span class="nav-icon">📦</span><span class="nav-label">Produtos / Serviços</span>
+    </button>
+    <button class="nav-item" data-page="entrada" id="nav-entrada">
+      <span class="nav-icon">📥</span><span class="nav-label">Entrada de Estoque</span>
+    </button>
+    <button class="nav-item" data-page="saida" id="nav-saida">
+      <span class="nav-icon">📤</span><span class="nav-label">Venda / Saída</span>
+    </button>
+    <button class="nav-item" data-page="caixa" id="nav-caixa">
+      <span class="nav-icon">💰</span><span class="nav-label">Fluxo de Caixa</span>
+    </button>
+    <button class="nav-item" data-page="movimentacoes" id="nav-movimentacoes">
+      <span class="nav-icon">🔄</span><span class="nav-label">Movimentações</span>
+    </button>
+    <button class="nav-item" data-page="config" id="nav-config">
+      <span class="nav-icon">⚙️</span><span class="nav-label">Configurações</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <!-- Usuário logado -->
+    <div class="user-info-sidebar">
+      <div class="user-avatar">👤</div>
+      <div class="user-details">
+        <div class="user-name" id="usuarioNomeDisplay">—</div>
+        <div class="user-cargo" id="usuarioCargoDisplay"></div>
+      </div>
+      <button class="btn-logout" onclick="fazerLogout()" title="Sair">🚪</button>
+    </div>
+    <div class="connection-badge" id="connectionBadge">
+      <span class="dot"></span><span id="connectionLabel">Conectando…</span>
+    </div>
+  </div>
+</aside>
+
+<!-- ══════════════════════════════════════════════════════════
+     MAIN CONTENT
+═══════════════════════════════════════════════════════════ -->
+<main class="main" id="mainContent">
+
+  <!-- ── TOPBAR ── -->
+  <header class="topbar">
+    <div class="topbar-left">
+      <button class="menu-btn" id="menuBtn">☰</button>
+      <h1 class="page-title" id="pageTitle">Dashboard</h1>
+    </div>
+    <div class="topbar-right">
+      <div class="datetime" id="datetimeDisplay"></div>
+      <button class="btn btn-outline btn-sm" onclick="refreshCurrentPage()" title="Atualizar dados">↻ Atualizar</button>
+    </div>
+  </header>
+
+  <!-- ── TOAST ── -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: DASHBOARD
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page active" id="page-dashboard">
+    <div class="dashboard-grid" id="dashboardCards">
+      <div class="card metric-card loading-shimmer"><div class="skeleton-line"></div></div>
+      <div class="card metric-card loading-shimmer"><div class="skeleton-line"></div></div>
+      <div class="card metric-card loading-shimmer"><div class="skeleton-line"></div></div>
+      <div class="card metric-card loading-shimmer"><div class="skeleton-line"></div></div>
+    </div>
+
+    <div class="dash-row">
+      <div class="card dash-formas">
+        <div class="card-header"><h3>💳 Receitas por Forma de Pagamento</h3></div>
+        <div id="formasPagChart" class="formas-chart"></div>
+      </div>
+      <div class="card dash-ultimas">
+        <div class="card-header"><h3>🕒 Últimas Movimentações</h3></div>
+        <div id="ultimasMovList" class="mov-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: PRODUTOS / SERVIÇOS
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-produtos">
+    <div class="dashboard-grid" id="produtosSummaryCards" style="margin-bottom: 20px;">
+      <div class="card metric-card">
+        <div class="metric-icon">📦</div>
+        <div class="metric-label">Qtd Total em Estoque</div>
+        <div class="metric-value blue" id="pTotalEstoqueQtd">0 un</div>
+        <div class="metric-sub">Soma das quantidades</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-icon">⚠️</div>
+        <div class="metric-label">Estoque Baixo (&lt;5)</div>
+        <div class="metric-value red" id="pEstoqueBaixoCount">0 itens</div>
+        <div class="metric-sub">Requer reposição</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-icon">🏷️</div>
+        <div class="metric-label">Produtos Cadastrados</div>
+        <div class="metric-value green" id="pProdutosCount">0</div>
+        <div class="metric-sub">Com controle de quantidade</div>
+      </div>
+      <div class="card metric-card">
+        <div class="metric-icon">🔧</div>
+        <div class="metric-label">Serviços Cadastrados</div>
+        <div class="metric-value purple" id="pServicosCount">0</div>
+        <div class="metric-sub">Sem estoque físico</div>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <div class="search-wrap">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="searchProduto" placeholder="Buscar produto ou serviço…" class="search-input" oninput="filtrarProdutos()"/>
+      </div>
+      <div class="filter-group">
+        <button class="btn btn-ghost btn-sm filter-tab active" data-filter="TODOS" onclick="setFiltroTipo(this)">Todos</button>
+        <button class="btn btn-ghost btn-sm filter-tab" data-filter="PRODUTO" onclick="setFiltroTipo(this)">Produtos</button>
+        <button class="btn btn-ghost btn-sm filter-tab" data-filter="SERVICO" onclick="setFiltroTipo(this)">Serviços</button>
+      </div>
+      <button class="btn btn-primary" onclick="abrirModalProduto()">＋ Novo Cadastro</button>
+    </div>
+
+    <div class="table-wrap">
+      <table class="data-table" id="tabelaProdutos">
+        <thead>
+          <tr>
+            <th>Tipo</th><th>Nome</th><th>Categoria</th><th>Unidade</th>
+            <th>Quantidade Atual</th><th>Custo (R$)</th><th>Venda (R$)</th><th>Cadastro</th><th>Ações</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyProdutos"><tr><td colspan="9" class="loading-cell">Carregando…</td></tr></tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: ENTRADA
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-entrada">
+    <div class="form-page-wrap">
+      <div class="card form-card">
+        <div class="card-header">
+          <h3>📥 Registrar Entrada de Estoque</h3>
+          <p class="card-sub">Informe o produto e a quantidade recebida</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Produto / Serviço *</label>
+            <select id="entProduto" class="form-control" onchange="onProdutoEntradaChange()">
+              <option value="">— Selecione —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Item</label>
+            <input type="text" id="entTipoItem" class="form-control" readonly/>
+          </div>
+          <div class="form-group">
+            <label>Quantidade *</label>
+            <input type="number" id="entQtd" class="form-control" min="0.01" step="0.01" placeholder="0" oninput="calcEntradaTotal()"/>
+          </div>
+          <div class="form-group">
+            <label>Valor Unitário (R$)</label>
+            <input type="number" id="entValor" class="form-control" min="0" step="0.01" placeholder="0,00" oninput="calcEntradaTotal()"/>
+          </div>
+          <div class="form-group">
+            <label>Forma de Pagamento</label>
+            <select id="entFormaPag" class="form-control">
+              <option value="DINHEIRO">💵 Dinheiro</option>
+              <option value="PIX">⚡ Pix</option>
+              <option value="DEBITO">💳 Débito</option>
+              <option value="CREDITO">💳 Crédito</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Observação</label>
+            <input type="text" id="entObs" class="form-control" placeholder="Fornecedor, NF, etc."/>
+          </div>
+        </div>
+
+        <div class="total-box">
+          <span>Total da Entrada:</span>
+          <span class="total-value danger" id="entTotal">R$ 0,00</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="limparEntrada()">✕ Limpar</button>
+          <button class="btn btn-danger" onclick="salvarEntrada()" id="btnSalvarEntrada">
+            <span class="btn-icon">📥</span> Registrar Entrada
+          </button>
+        </div>
+      </div>
+
+      <div class="card recent-card">
+        <div class="card-header between">
+          <h3>Entradas Recentes</h3>
+          <div class="filter-row">
+            <label style="font-size:0.75rem;color:var(--text-muted)">De:</label>
+            <input type="date" id="filtroEntradaDataInicio" class="form-control sm" onchange="carregarEntradas()"/>
+            <label style="font-size:0.75rem;color:var(--text-muted)">Até:</label>
+            <input type="date" id="filtroEntradaDataFim" class="form-control sm" onchange="carregarEntradas()"/>
+            <button class="btn btn-ghost btn-sm" onclick="limparFiltroDataRange('filtroEntradaDataInicio', 'filtroEntradaDataFim', carregarEntradas)" title="Ver todas as datas">✕ Todas</button>
+          </div>
+        </div>
+        <div id="listaEntradas" class="recent-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: SAÍDA / VENDA
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-saida">
+    <div class="form-page-wrap">
+      <div class="card form-card">
+        <div class="card-header">
+          <h3>📤 Registrar Venda / Saída</h3>
+          <p class="card-sub">Registre a venda e a forma de pagamento</p>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Produto / Serviço *</label>
+            <select id="saidaProduto" class="form-control" onchange="onProdutoSaidaChange()">
+              <option value="">— Selecione —</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Tipo de Item</label>
+            <input type="text" id="saidaTipoItem" class="form-control" readonly/>
+          </div>
+          <div class="form-group">
+            <label>Estoque Atual</label>
+            <input type="text" id="saidaEstoqueAtual" class="form-control" readonly/>
+          </div>
+          <div class="form-group">
+            <label>Quantidade *</label>
+            <input type="number" id="saidaQtd" class="form-control" min="0.01" step="0.01" placeholder="0" oninput="calcSaidaTotal()"/>
+          </div>
+          <div class="form-group">
+            <label>Valor Unitário (R$) *</label>
+            <input type="number" id="saidaValor" class="form-control" min="0" step="0.01" placeholder="0,00" oninput="calcSaidaTotal()"/>
+          </div>
+        </div>
+
+        <div class="payment-methods">
+          <label class="label-section">Forma de Pagamento *</label>
+          <div class="payment-grid">
+            <label class="payment-card" id="pay-DINHEIRO">
+              <input type="radio" name="saidaFormaPag" value="DINHEIRO" checked/>
+              <span class="pay-icon">💵</span><span class="pay-label">Dinheiro</span>
+            </label>
+            <label class="payment-card" id="pay-PIX">
+              <input type="radio" name="saidaFormaPag" value="PIX"/>
+              <span class="pay-icon">⚡</span><span class="pay-label">Pix</span>
+            </label>
+            <label class="payment-card" id="pay-DEBITO">
+              <input type="radio" name="saidaFormaPag" value="DEBITO"/>
+              <span class="pay-icon">💳</span><span class="pay-label">Débito</span>
+            </label>
+            <label class="payment-card" id="pay-CREDITO">
+              <input type="radio" name="saidaFormaPag" value="CREDITO"/>
+              <span class="pay-icon">💳</span><span class="pay-label">Crédito</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label>Observação</label>
+          <input type="text" id="saidaObs" class="form-control" placeholder="Cliente, pedido, etc."/>
+        </div>
+
+        <div class="total-box">
+          <span>Total da Venda:</span>
+          <span class="total-value success" id="saidaTotal">R$ 0,00</span>
+        </div>
+
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="limparSaida()">✕ Limpar</button>
+          <button class="btn btn-success" onclick="salvarSaida()" id="btnSalvarSaida">
+            <span class="btn-icon">📤</span> Confirmar Venda
+          </button>
+        </div>
+      </div>
+
+      <div class="card recent-card">
+        <div class="card-header between">
+          <h3>Vendas Recentes</h3>
+          <div class="filter-row">
+            <label style="font-size:0.75rem;color:var(--text-muted)">De:</label>
+            <input type="date" id="filtroSaidaDataInicio" class="form-control sm" onchange="carregarSaidas()"/>
+            <label style="font-size:0.75rem;color:var(--text-muted)">Até:</label>
+            <input type="date" id="filtroSaidaDataFim" class="form-control sm" onchange="carregarSaidas()"/>
+            <button class="btn btn-ghost btn-sm" onclick="limparFiltroDataRange('filtroSaidaDataInicio', 'filtroSaidaDataFim', carregarSaidas)" title="Ver todas as datas">✕ Todas</button>
+          </div>
+        </div>
+        <div id="listaSaidas" class="recent-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: FLUXO DE CAIXA
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-caixa">
+    <div class="caixa-header">
+      <div class="caixa-cards">
+        <div class="card caixa-metric green">
+          <div class="cmet-label">Total Receitas</div>
+          <div class="cmet-val" id="cTotalReceitas">R$ —</div>
+        </div>
+        <div class="card caixa-metric red">
+          <div class="cmet-label">Total Despesas</div>
+          <div class="cmet-val" id="cTotalDespesas">R$ —</div>
+        </div>
+        <div class="card caixa-metric blue">
+          <div class="cmet-label">Saldo Atual</div>
+          <div class="cmet-val" id="cSaldoAtual">R$ —</div>
+        </div>
+      </div>
+
+      <div class="card formas-breakdown" id="caixaFormasBreakdown"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header between">
+        <h3>Histórico do Caixa</h3>
+        <div class="filter-row">
+          <label style="font-size:0.75rem;color:var(--text-muted)">De:</label>
+          <input type="date" id="filtroCaixaDataInicio" class="form-control sm" onchange="carregarCaixa()"/>
+          <label style="font-size:0.75rem;color:var(--text-muted)">Até:</label>
+          <input type="date" id="filtroCaixaDataFim" class="form-control sm" onchange="carregarCaixa()"/>
+          <button class="btn btn-ghost btn-sm" onclick="limparFiltroDataRange('filtroCaixaDataInicio', 'filtroCaixaDataFim', carregarCaixa)" title="Ver todas as datas">✕ Todas</button>
+          <select id="filtroCaixaTipo" class="form-control sm" onchange="carregarCaixa()">
+            <option value="">Todos os tipos</option>
+            <option value="RECEITA">Receitas</option>
+            <option value="DESPESA">Despesas</option>
+          </select>
+          <select id="filtroCaixaForma" class="form-control sm" onchange="carregarCaixa()">
+            <option value="">Todas as formas</option>
+            <option value="DINHEIRO">Dinheiro</option>
+            <option value="PIX">Pix</option>
+            <option value="DEBITO">Débito</option>
+            <option value="CREDITO">Crédito</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalCaixa()">＋ Lançamento Manual</button>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Data</th><th>Hora</th><th>Tipo</th><th>Descrição</th><th>Forma Pag.</th><th>Valor (R$)</th><th>Saldo</th></tr></thead>
+          <tbody id="tbodyCaixa"><tr><td colspan="7" class="loading-cell">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: MOVIMENTAÇÕES
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-movimentacoes">
+    <div class="card">
+      <div class="card-header between">
+        <h3>Histórico de Movimentações</h3>
+        <div class="filter-row">
+          <label style="font-size:0.75rem;color:var(--text-muted)">De:</label>
+          <input type="date" id="filtroMovDataInicio" class="form-control sm" onchange="carregarMovimentacoes()"/>
+          <label style="font-size:0.75rem;color:var(--text-muted)">Até:</label>
+          <input type="date" id="filtroMovDataFim" class="form-control sm" onchange="carregarMovimentacoes()"/>
+          <button class="btn btn-ghost btn-sm" onclick="limparFiltroDataRange('filtroMovDataInicio', 'filtroMovDataFim', carregarMovimentacoes)" title="Ver todas as datas">✕ Todas</button>
+          <select id="filtroMovTipo" class="form-control sm" onchange="carregarMovimentacoes()">
+            <option value="">Todos os tipos</option>
+            <option value="ENTRADA">Entradas</option>
+            <option value="SAIDA">Saídas/Vendas</option>
+          </select>
+          <select id="filtroMovForma" class="form-control sm" onchange="carregarMovimentacoes()">
+            <option value="">Todas as formas</option>
+            <option value="DINHEIRO">Dinheiro</option>
+            <option value="PIX">Pix</option>
+            <option value="DEBITO">Débito</option>
+            <option value="CREDITO">Crédito</option>
+          </select>
+        </div>
+      </div>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead>
+            <tr><th>Data</th><th>Hora</th><th>Tipo</th><th>Item</th><th>Qtd</th><th>V. Unit.</th><th>Total</th><th>Pagamento</th><th>Obs.</th></tr>
+          </thead>
+          <tbody id="tbodyMovimentacoes"><tr><td colspan="9" class="loading-cell">Carregando…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════════════════════════════════
+       PAGE: CONFIGURAÇÕES
+  ═══════════════════════════════════════════════════════ -->
+  <section class="page" id="page-config">
+    <div class="card config-card">
+      <div class="card-header">
+        <h3>⚙️ Configurações do Sistema</h3>
+        <p class="card-sub">Configure a conexão com o Google Sheets</p>
+      </div>
+
+      <div class="config-section">
+        <h4>🔗 URL do Google Apps Script</h4>
+        <p class="config-help">
+          Cole aqui a URL gerada ao implantar o <code>apps-script.js</code> como Web App no Google Sheets.
+          Veja as instruções dentro do arquivo <code>apps-script.js</code>.
+        </p>
+        <div class="input-group">
+          <input type="text" id="configScriptUrl" class="form-control"
+            placeholder="https://script.google.com/macros/s/.../exec"/>
+          <button class="btn btn-primary" onclick="salvarConfig()">💾 Salvar</button>
+        </div>
+        <div id="configStatus" class="config-status"></div>
+      </div>
+
+      <div class="config-section">
+        <h4>🛠️ Inicializar Planilha</h4>
+        <p class="config-help">
+          Clique para criar automaticamente as abas <strong>PRODUTOS</strong>, <strong>MOVIMENTACOES</strong> e <strong>CAIXA</strong>
+          na planilha Google Sheets (só precisa fazer isso uma vez).
+        </p>
+        <button class="btn btn-warning" onclick="inicializarPlanilha()">⚡ Criar Abas na Planilha</button>
+      </div>
+
+      <div class="config-section usuarios-section">
+        <div style="display:flex;align-items:center;justify-space-between;margin-bottom:12px">
+          <h4 style="margin:0">👥 Usuários e Operadores</h4>
+          <button class="btn btn-primary btn-sm" onclick="abrirModalUsuario()">+ Novo Usuário</button>
+        </div>
+        <p class="config-help">
+          Gerencie os usuários que têm acesso ao sistema. O operador ativo é gravado no registro de movimentações.
+        </p>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Nome</th>
+                <th>Login</th>
+                <th>Cargo / Perfil</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="tbodyUsuarios">
+              <!-- Preenchido via app.js -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="config-section">
+        <h4>📋 Instruções de Configuração</h4>
+        <div class="instructions">
+          <ol>
+            <li>Abra a planilha: <a href="https://docs.google.com/spreadsheets/d/1W7r46a1XtgoOsO9M_tY5-amKBvuPa3QaCjqnLILpZPQ/" target="_blank">Clique aqui 🔗</a></li>
+            <li>Vá em <strong>Extensões &gt; Apps Script</strong></li>
+            <li>Apague o código existente e cole o conteúdo do arquivo <code>apps-script.js</code></li>
+            <li>Clique em <strong>Implantar &gt; Nova implantação</strong></li>
+            <li>Tipo: <em>App da Web</em> | Executar como: <em>Eu mesmo</em> | Acesso: <em>Qualquer pessoa</em></li>
+            <li>Copie a URL gerada e cole no campo acima</li>
+            <li>Clique em "Criar Abas na Planilha" uma vez</li>
+            <li>Pronto! O sistema está conectado 🎉</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAIS
+═══════════════════════════════════════════════════════════ -->
+
+<!-- Modal Produto -->
+<div class="modal-overlay" id="modalProduto" onclick="fecharModal('modalProduto')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalProdutoTitulo">Novo Produto / Serviço</h3>
+      <button class="modal-close" onclick="fecharModal('modalProduto')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="mpId"/>
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select id="mpTipo" class="form-control">
+            <option value="PRODUTO">📦 Produto</option>
+            <option value="SERVICO">🔧 Serviço</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Categoria</label>
+          <input type="text" id="mpCategoria" class="form-control" placeholder="Ex: Impressão, Material…"/>
+        </div>
+        <div class="form-group full">
+          <label>Nome *</label>
+          <input type="text" id="mpNome" class="form-control" placeholder="Nome do produto ou serviço"/>
+        </div>
+        <div class="form-group full">
+          <label>Descrição</label>
+          <input type="text" id="mpDescricao" class="form-control" placeholder="Descrição detalhada"/>
+        </div>
+        <div class="form-group">
+          <label>Unidade</label>
+          <select id="mpUnidade" class="form-control">
+            <option value="UN">UN — Unidade</option>
+            <option value="CX">CX — Caixa</option>
+            <option value="PC">PC — Pacote</option>
+            <option value="RES">RES — Resma</option>
+            <option value="KG">KG — Quilograma</option>
+            <option value="M">M — Metro</option>
+            <option value="M2">M² — Metro quadrado</option>
+            <option value="L">L — Litro</option>
+            <option value="SV">SV — Serviço</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Estoque Inicial</label>
+          <input type="number" id="mpQtd" class="form-control" min="0" step="0.01" placeholder="0"/>
+        </div>
+        <div class="form-group">
+          <label>Preço de Custo (R$)</label>
+          <input type="number" id="mpCusto" class="form-control" min="0" step="0.01" placeholder="0,00"/>
+        </div>
+        <div class="form-group">
+          <label>Preço de Venda (R$)</label>
+          <input type="number" id="mpVenda" class="form-control" min="0" step="0.01" placeholder="0,00"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modalProduto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarProduto()" id="btnSalvarProduto">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Caixa Manual -->
+<div class="modal-overlay" id="modalCaixa" onclick="fecharModal('modalCaixa')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>💰 Lançamento Manual no Caixa</h3>
+      <button class="modal-close" onclick="fecharModal('modalCaixa')">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-grid">
+        <div class="form-group">
+          <label>Tipo *</label>
+          <select id="mcTipo" class="form-control">
+            <option value="RECEITA">🟢 Receita</option>
+            <option value="DESPESA">🔴 Despesa</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Valor (R$) *</label>
+          <input type="number" id="mcValor" class="form-control" min="0.01" step="0.01" placeholder="0,00"/>
+        </div>
+        <div class="form-group">
+          <label>Forma de Pagamento</label>
+          <select id="mcFormaPag" class="form-control">
+            <option value="DINHEIRO">💵 Dinheiro</option>
+            <option value="PIX">⚡ Pix</option>
+            <option value="DEBITO">💳 Débito</option>
+            <option value="CREDITO">💳 Crédito</option>
+          </select>
+        </div>
+        <div class="form-group full">
+          <label>Descrição *</label>
+          <input type="text" id="mcDescricao" class="form-control" placeholder="Ex: Despesa com fornecedor, Receita extra…"/>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modalCaixa')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarCaixaManual()">💾 Registrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Confirmação Exclusão -->
+<div class="modal-overlay" id="modalConfirm" onclick="fecharModal('modalConfirm')">
+  <div class="modal modal-sm" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3>⚠️ Confirmar Exclusão</h3>
+      <button class="modal-close" onclick="fecharModal('modalConfirm')">✕</button>
+    </div>
+    <div class="modal-body">
+      <p id="confirmMsg">Deseja realmente excluir este item?</p>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modalConfirm')">Cancelar</button>
+      <button class="btn btn-danger" id="btnConfirmOk">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════
+     MODAL DE LOGIN
+═══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay open" id="modalLogin" style="z-index:9999;backdrop-filter:blur(12px)">
+  <div class="modal modal-sm" style="max-width:400px" onclick="event.stopPropagation()">
+    <div class="modal-header" style="flex-direction:column;align-items:center;gap:8px;padding:32px 24px 16px">
+      <div style="font-size:3rem">🖨️</div>
+      <h3 style="font-size:1.4rem;margin:0">CSTI — Gráfica</h3>
+      <p style="color:var(--text-muted);font-size:0.85rem;margin:0">Faça login para continuar</p>
+    </div>
+    <div class="modal-body">
+      <div class="form-group" style="margin-bottom:14px">
+        <label>Usuário</label>
+        <input type="text" id="loginUser" class="form-control" placeholder="Digite seu login"
+          onkeydown="if(event.key==='Enter')document.getElementById('loginPass').focus()"/>
+      </div>
+      <div class="form-group" style="margin-bottom:8px">
+        <label>Senha</label>
+        <input type="password" id="loginPass" class="form-control" placeholder="Digite sua senha"
+          onkeydown="if(event.key==='Enter')fazerLogin()"/>
+      </div>
+      <div id="loginErro" style="display:none;color:var(--danger);font-size:0.85rem;padding:8px;background:rgba(239,68,68,.1);border-radius:8px;margin-top:8px"></div>
+      <div style="color:var(--text-muted);font-size:0.78rem;margin-top:12px;text-align:center">
+        Padrão inicial: <strong>admin</strong> / <strong>admin123</strong>
+      </div>
+    </div>
+    <div class="modal-footer" style="padding:16px 24px 28px">
+      <button class="btn btn-primary" style="width:100%;font-size:1rem" onclick="fazerLogin()">🔑 Entrar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Usuário -->
+<div class="modal-overlay" id="modalUsuario" onclick="fecharModal('modalUsuario')">
+  <div class="modal" onclick="event.stopPropagation()">
+    <div class="modal-header">
+      <h3 id="modalUsuarioTitulo">👤 Novo Usuário</h3>
+      <button class="modal-close" onclick="fecharModal('modalUsuario')">✕</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="muId"/>
+      <div class="form-grid">
+        <div class="form-group full">
+          <label>Nome completo *</label>
+          <input type="text" id="muNome" class="form-control" placeholder="Ex: João Silva"/>
+        </div>
+        <div class="form-group">
+          <label>Login (usuário) *</label>
+          <input type="text" id="muLogin" class="form-control" placeholder="Ex: joao"/>
+        </div>
+        <div class="form-group">
+          <label>Senha *</label>
+          <input type="password" id="muSenha" class="form-control" placeholder="Deixe em branco para manter"/>
+        </div>
+        <div class="form-group">
+          <label>Cargo / Perfil</label>
+          <select id="muCargo" class="form-control">
+            <option value="Administrador">Administrador</option>
+            <option value="Gerente">Gerente</option>
+            <option value="Operador" selected>Operador</option>
+            <option value="Vendedor">Vendedor</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="fecharModal('modalUsuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="salvarUsuario()">💾 Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
+
