@@ -22,7 +22,8 @@
 const HEADERS = {
   PRODUTOS:      ['ID','Tipo','Nome','Descricao','Unidade','Quantidade','Preco_Custo','Preco_Venda','Categoria','Data_Cadastro','Ativo'],
   MOVIMENTACOES: ['ID','Data','Hora','Tipo','ID_Produto','Nome_Produto','Tipo_Item','Quantidade','Valor_Unitario','Valor_Total','Forma_Pagamento','Observacao','Operador'],
-  CAIXA:         ['ID','Data','Hora','Tipo','Descricao','Valor','Forma_Pagamento','ID_Movimentacao','Saldo_Acumulado']
+  CAIXA:         ['ID','Data','Hora','Tipo','Descricao','Valor','Forma_Pagamento','ID_Movimentacao','Saldo_Acumulado'],
+  USUARIOS:      ['ID','Nome','Login','Senha','Cargo']
 };
 
 function gerarId(p) { return p+'_'+new Date().getTime()+'_'+Math.floor(Math.random()*9999); }
@@ -233,6 +234,62 @@ function registrarCaixaManual(d) {
   return { sucesso:true, id, saldoAtual:ns, mensagem:'Lançado!' };
 }
 
+/* ── USUÁRIOS ─────────────────────────────────────────────── */
+function listarUsuarios() {
+  const aba = getAba('USUARIOS');
+  const rows = aba.getDataRange().getValues();
+  if (rows.length <= 1) {
+    aba.appendRow(['USR_1', 'Administrador', 'admin', 'admin123', 'Administrador']);
+    return [{ ID: 'USR_1', Nome: 'Administrador', Login: 'admin', Senha: 'admin123', Cargo: 'Administrador' }];
+  }
+  const h = rows[0];
+  return rows.slice(1).map(r => {
+    const o = {};
+    h.forEach((k, i) => { o[k] = (r[i] !== undefined && r[i] !== null) ? String(r[i]) : ''; });
+    return o;
+  });
+}
+
+function criarUsuario(d) {
+  const aba = getAba('USUARIOS');
+  const usrs = listarUsuarios();
+  if (usrs.some(u => String(u.Login).toLowerCase() === String(d.Login).toLowerCase())) {
+    return { sucesso: false, mensagem: 'Login "' + d.Login + '" já cadastrado.' };
+  }
+  const id = gerarId('USR');
+  aba.appendRow([id, d.Nome||'', d.Login||'', d.Senha||'', d.Cargo||'Operador']);
+  return { sucesso: true, id, mensagem: 'Usuário cadastrado com sucesso!' };
+}
+
+function atualizarUsuario(id, d) {
+  const aba = getAba('USUARIOS'), rows = aba.getDataRange().getValues(), h = rows[0];
+  const iI = h.indexOf('ID');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][iI]) === String(id)) {
+      ['Nome','Login','Senha','Cargo'].forEach(c => {
+        if (d[c] !== undefined && d[c] !== '') {
+          const col = h.indexOf(c) + 1;
+          aba.getRange(i + 1, col).setValue(d[c]);
+        }
+      });
+      return { sucesso: true, mensagem: 'Usuário atualizado com sucesso!' };
+    }
+  }
+  return { sucesso: false, mensagem: 'Usuário não encontrado.' };
+}
+
+function excluirUsuario(id) {
+  const aba = getAba('USUARIOS'), rows = aba.getDataRange().getValues(), h = rows[0];
+  const iI = h.indexOf('ID');
+  for (let i = 1; i < rows.length; i++) {
+    if (String(rows[i][iI]) === String(id)) {
+      aba.deleteRow(i + 1);
+      return { sucesso: true, mensagem: 'Usuário excluído com sucesso!' };
+    }
+  }
+  return { sucesso: false, mensagem: 'Usuário não encontrado.' };
+}
+
 /* ── DASHBOARD ───────────────────────────────────────────── */
 function getDashboard() {
   const prods = listarProdutos();
@@ -264,6 +321,9 @@ function rotearEscrita(b) {
     case 'excluir_produto':        return excluirProduto(b.id);
     case 'registrar_movimentacao': return registrarMovimentacao(b.dados);
     case 'registrar_caixa':        return registrarCaixaManual(b.dados);
+    case 'criar_usuario':          return criarUsuario(b.dados);
+    case 'atualizar_usuario':      return atualizarUsuario(b.id, b.dados);
+    case 'excluir_usuario':        return excluirUsuario(b.id);
     default: return {sucesso:false, mensagem:'Ação de escrita não reconhecida: '+b.acao};
   }
 }
@@ -286,8 +346,9 @@ function doGet(e) {
       case 'listar_caixa':         r={sucesso:true,dados:listarCaixa(p)};         break;
       case 'resumo_caixa':         r={sucesso:true,dados:resumoCaixa()};          break;
       case 'dashboard':            r={sucesso:true,dados:getDashboard()};         break;
+      case 'listar_usuarios':      r={sucesso:true,dados:listarUsuarios()};       break;
       case 'inicializar':
-        ['PRODUTOS','MOVIMENTACOES','CAIXA'].forEach(n=>getAba(n));
+        ['PRODUTOS','MOVIMENTACOES','CAIXA','USUARIOS'].forEach(n=>getAba(n));
         r={sucesso:true,mensagem:'Abas criadas com sucesso!'};                    break;
       default: r={sucesso:false,mensagem:'Ação não reconhecida: '+p.acao};
     }

@@ -4,8 +4,12 @@
 ================================================================ */
 
 // ── CONFIG ────────────────────────────────────────────────────
+// URL padrão do Apps Script. Preencha aqui para que QUALQUER dispositivo
+// (celular, tablet, outros PCs via GitHub Pages) já entre conectado automaticamente!
+const DEFAULT_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw77r-ISLdV5O2U-f60bU86341iw1kUppgk-983IuB4W24uS9Ssg-h_xEXYt81DY1fSmg/exec';
+
 const SCRIPT_URL_KEY = 'csti_script_url';
-let   SCRIPT_URL     = localStorage.getItem(SCRIPT_URL_KEY) || '';
+let   SCRIPT_URL     = localStorage.getItem(SCRIPT_URL_KEY) || DEFAULT_SCRIPT_URL;
 
 // Usuário logado na sessão
 let usuarioLogado = null;
@@ -848,7 +852,7 @@ async function carregarMovimentacoes() {
 
 // ── CONFIGURAÇÕES ─────────────────────────────────────────────
 function carregarConfigUrl() {
-  const url = localStorage.getItem(SCRIPT_URL_KEY) || '';
+  const url = localStorage.getItem(SCRIPT_URL_KEY) || DEFAULT_SCRIPT_URL || '';
   document.getElementById('configScriptUrl').value = url;
 }
 
@@ -896,14 +900,29 @@ async function inicializarPlanilha() {
 }
 
 // ── LOGIN / USUÁRIOS ───────────────────────────────────────────────
+// ── LOGIN / USUÁRIOS ───────────────────────────────────────────────
 const USUARIOS_KEY = 'csti_usuarios';
+let cacheUsuarios = [];
 
-function getUsuarios() {
+async function getUsuarios() {
+  if (SCRIPT_URL) {
+    try {
+      const r = await apiGet('listar_usuarios');
+      if (r.sucesso && Array.isArray(r.dados)) {
+        cacheUsuarios = r.dados.map(u => ({
+          id: u.ID,
+          nome: u.Nome,
+          login: u.Login,
+          senha: u.Senha,
+          cargo: u.Cargo
+        }));
+        return cacheUsuarios;
+      }
+    } catch (e) { console.error('Erro ao listar usuários:', e); }
+  }
   const raw = localStorage.getItem(USUARIOS_KEY);
   if (raw) return JSON.parse(raw);
-  // Cria usuário admin padrão se não existir
-  const padrao = [{ id:1, nome:'Administrador', login:'admin', senha:'admin123', cargo:'Administrador' }];
-  localStorage.setItem(USUARIOS_KEY, JSON.stringify(padrao));
+  const padrao = [{ id: 'USR_1', nome: 'Administrador', login: 'admin', senha: 'admin123', cargo: 'Administrador' }];
   return padrao;
 }
 
@@ -927,7 +946,7 @@ function verificarSessao() {
   }
 }
 
-function fazerLogin() {
+async function fazerLogin() {
   const loginInput = document.getElementById('loginUser').value.trim();
   const senhaInput = document.getElementById('loginPass').value;
   const erroEl     = document.getElementById('loginErro');
@@ -938,8 +957,8 @@ function fazerLogin() {
     return;
   }
 
-  const usuarios = getUsuarios();
-  const user = usuarios.find(u => u.login === loginInput && u.senha === senhaInput);
+  const usuarios = await getUsuarios();
+  const user = usuarios.find(u => String(u.login).toLowerCase() === loginInput.toLowerCase() && String(u.senha) === senhaInput);
 
   if (user) {
     erroEl.style.display = 'none';
@@ -948,7 +967,6 @@ function fazerLogin() {
     document.getElementById('usuarioNomeDisplay').textContent = usuarioLogado.nome;
     document.getElementById('usuarioCargoDisplay').textContent = usuarioLogado.cargo || '';
     fecharModal('modalLogin');
-    // Limpa campos
     document.getElementById('loginUser').value = '';
     document.getElementById('loginPass').value = '';
     showToast(`Bem-vindo, ${usuarioLogado.nome}! 👋`, 'success');
@@ -971,17 +989,18 @@ function fazerLogout() {
 }
 
 // Gerenciamento de usuários
-function carregarListaUsuarios() {
-  const usuarios = getUsuarios();
+async function carregarListaUsuarios() {
+  const usuarios = await getUsuarios();
   const tbody = document.getElementById('tbodyUsuarios');
+  if (!tbody) return;
   tbody.innerHTML = usuarios.map(u => `
     <tr>
       <td style="font-weight:600">${esc(u.nome)}</td>
       <td>${esc(u.login)}</td>
       <td><span class="chip PRODUTO">${esc(u.cargo)}</span></td>
       <td>
-        <button class="btn-action edit" onclick="editarUsuario(${u.id})" title="Editar">✏️</button>
-        ${u.login !== 'admin' ? `<button class="btn-action del" onclick="excluirUsuario(${u.id})" title="Excluir">🗑️</button>` : ''}
+        <button class="btn-action edit" onclick="editarUsuario('${esc(u.id)}')" title="Editar">✏️</button>
+        ${u.login !== 'admin' ? `<button class="btn-action del" onclick="excluirUsuario('${esc(u.id)}')" title="Excluir">🗑️</button>` : ''}
       </td>
     </tr>`).join('');
 }
@@ -995,7 +1014,7 @@ function abrirModalUsuario(id) {
     cargo: document.getElementById('muCargo'),
   };
   if (id) {
-    const u = getUsuarios().find(x => x.id === id);
+    const u = cacheUsuarios.find(x => String(x.id) === String(id));
     if (!u) return;
     document.getElementById('modalUsuarioTitulo').textContent = 'Editar Usuário';
     form.id.value    = u.id;
@@ -1010,7 +1029,7 @@ function abrirModalUsuario(id) {
   abrirModal('modalUsuario');
 }
 
-function salvarUsuario() {
+async function salvarUsuario() {
   const id    = document.getElementById('muId').value;
   const nome  = document.getElementById('muNome').value.trim();
   const login = document.getElementById('muLogin').value.trim();
@@ -1019,37 +1038,55 @@ function salvarUsuario() {
 
   if (!nome || !login) { showToast('Nome e login são obrigatórios', 'error'); return; }
 
-  let usuarios = getUsuarios();
-  if (id) {
-    // Editar
-    usuarios = usuarios.map(u => {
-      if (String(u.id) === String(id)) {
-        return { ...u, nome, login, cargo, senha: senha || u.senha };
-      }
-      return u;
-    });
-    showToast('Usuário atualizado!', 'success');
-  } else {
-    // Criar
-    if (!senha) { showToast('Informe a senha para o novo usuário', 'error'); return; }
-    if (usuarios.find(u => u.login === login)) { showToast('Login já existe!', 'error'); return; }
-    const novoId = Math.max(...usuarios.map(u => u.id)) + 1;
-    usuarios.push({ id: novoId, nome, login, senha, cargo });
-    showToast('Usuário criado!', 'success');
-  }
+  const dados = { Nome: nome, Login: login, Senha: senha, Cargo: cargo };
 
-  localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
-  fecharModal('modalUsuario');
-  carregarListaUsuarios();
+  try {
+    if (SCRIPT_URL) {
+      const body = id
+        ? { acao: 'atualizar_usuario', id, dados }
+        : { acao: 'criar_usuario', dados };
+      const r = await apiPostSeguro(body);
+      if (r.sucesso) {
+        showToast(id ? 'Usuário atualizado!' : 'Usuário criado!', 'success');
+      } else {
+        showToast('Erro: ' + (r.mensagem || 'Falha ao salvar'), 'error');
+        return;
+      }
+    } else {
+      let usuarios = await getUsuarios();
+      if (id) {
+        usuarios = usuarios.map(u => String(u.id) === String(id) ? { ...u, nome, login, cargo, senha: senha || u.senha } : u);
+      } else {
+        if (!senha) { showToast('Informe a senha para o novo usuário', 'error'); return; }
+        const novoId = 'USR_' + Date.now();
+        usuarios.push({ id: novoId, nome, login, senha, cargo });
+      }
+      localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
+      showToast('Usuário salvo localmente!', 'success');
+    }
+    fecharModal('modalUsuario');
+    await carregarListaUsuarios();
+  } catch (e) {
+    showToast('Erro ao salvar usuário: ' + e.message, 'error');
+  }
 }
 
 function editarUsuario(id) { abrirModalUsuario(id); }
 
-function excluirUsuario(id) {
-  let usuarios = getUsuarios().filter(u => u.id !== id);
-  localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
-  showToast('Usuário excluído!', 'success');
-  carregarListaUsuarios();
+async function excluirUsuario(id) {
+  try {
+    if (SCRIPT_URL) {
+      await apiPostSeguro({ acao: 'excluir_usuario', id });
+      showToast('Usuário excluído!', 'success');
+    } else {
+      let usuarios = (await getUsuarios()).filter(u => String(u.id) !== String(id));
+      localStorage.setItem(USUARIOS_KEY, JSON.stringify(usuarios));
+      showToast('Usuário excluído!', 'success');
+    }
+    await carregarListaUsuarios();
+  } catch (e) {
+    showToast('Erro ao excluir usuário: ' + e.message, 'error');
+  }
 }
 
 // ── MODAIS ────────────────────────────────────────────────────
