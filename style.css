@@ -451,6 +451,47 @@ input[type="date"].form-control { color-scheme: dark; cursor: pointer; }
 .instructions li strong { color: var(--text-primary); }
 .instructions a { color: var(--primary); }
 
+/* ── CALCULATOR ───────────────────────────────────────────── */
+.calculator-section {
+  margin-top: 20px;
+  padding: 16px;
+  background: rgba(59,130,246,0.04);
+  border: 1px dashed rgba(59,130,246,0.3);
+  border-radius: var(--radius-sm);
+}
+.calculator-grid {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 16px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+@media (max-width: 500px) { .calculator-grid { grid-template-columns: 1fr; } }
+.troco-display {
+  background: var(--bg-surface);
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+.troco-display label { font-size: 0.7rem; color: var(--text-muted); text-transform: uppercase; display: block; margin-bottom: 2px; }
+.troco-value { font-size: 1.2rem; font-weight: 800; color: var(--primary); }
+.troco-value.positive { color: var(--success); }
+.troco-value.negative { color: var(--danger); }
+
+.quick-cash { display: flex; flex-wrap: wrap; gap: 6px; }
+.btn-quick-cash {
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--t);
+}
+.btn-quick-cash:hover { border-color: var(--primary); color: var(--primary); background: var(--primary-glow); }
+
 /* ── MODAIS ──────────────────────────────────────────────── */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.7); backdrop-filter: blur(4px);

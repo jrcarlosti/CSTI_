@@ -645,6 +645,33 @@ function calcSaidaTotal() {
   const qtd = parseFloat(document.getElementById('saidaQtd').value) || 0;
   const val = parseFloat(document.getElementById('saidaValor').value) || 0;
   document.getElementById('saidaTotal').textContent = fmtMoney(qtd * val);
+  calcTroco();
+}
+
+function calcTroco() {
+  const total = parseNum(document.getElementById('saidaTotal').textContent);
+  const pago  = parseFloat(document.getElementById('saidaPago').value) || 0;
+  const troco = pago - total;
+  const el = document.getElementById('saidaTroco');
+  el.textContent = fmtMoney(troco);
+  
+  el.classList.remove('positive', 'negative');
+  if (pago > 0) {
+    if (troco > 0) el.classList.add('positive');
+    else if (troco < 0) el.classList.add('negative');
+  }
+}
+
+function addQuickCash(val) {
+  const input = document.getElementById('saidaPago');
+  const atual = parseFloat(input.value) || 0;
+  input.value = (atual + val).toFixed(2);
+  calcTroco();
+}
+
+function clearQuickCash() {
+  document.getElementById('saidaPago').value = '';
+  calcTroco();
 }
 
 async function salvarSaida() {
@@ -693,6 +720,9 @@ function limparSaida() {
   document.getElementById('saidaValor').value = '';
   document.getElementById('saidaObs').value = '';
   document.getElementById('saidaTotal').textContent = 'R$ 0,00';
+  document.getElementById('saidaPago').value = '';
+  document.getElementById('saidaTroco').textContent = 'R$ 0,00';
+  document.getElementById('saidaTroco').className = 'troco-value';
   document.querySelector('input[name="saidaFormaPag"][value="DINHEIRO"]').checked = true;
 }
 
@@ -1114,6 +1144,8 @@ function parseNum(val) {
   if (typeof val === 'number') return isNaN(val) ? 0 : val;
   if (!val && val !== 0) return 0;
   var s = String(val).trim();
+  // Remove R$ e espaços extras para não quebrar o parseFloat
+  s = s.replace('R$', '').replace(/\s/g, '');
   if (s.indexOf(',') >= 0) {
     s = s.replace(/\./g, '').replace(',', '.');
   }
